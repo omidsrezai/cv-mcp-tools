@@ -1,0 +1,10 @@
+accelerate==0.33.0
+diffusers==0.30.3
+gradio==4.43.0
+pillow==10.4.0
+protobuf==5.27.3
+requests==2.32.3
+sentencepiece==0.2.0
+torch==2.4.0
+torchaudio==2.4.0
+transformers==4.44.0

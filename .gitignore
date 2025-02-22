@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+uv.lock
+*.pt
+.vscode/
+.idea/
+.DS_Store
+Thumbs.dbobject_detection/.python-version
+object_detection/.python-version
