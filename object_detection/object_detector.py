@@ -1,25 +1,28 @@
+import io
 import os
+import tempfile
 from typing import Union, Tuple
 
-from ultralytics import YOLO
 from mcp.server.fastmcp import FastMCP, Image
-import io
-from PIL import Image as PILImage
-
 from minio import Minio
 from minio.error import S3Error
-
-
-# MinIO Configuration
-MINIO_URL = "localhost:9000"
-MINIO_ACCESS_KEY = "minioadmin"
-MINIO_SECRET_KEY = "minioadmin"
-
-# YOLO model to use
-YOLO_MODEL = "yolo11m.pt"
+from PIL import Image as PILImage
+from ultralytics import YOLO
 
 # Initialize FastMCP server
-mcp = FastMCP("object_detector")
+mcp = FastMCP("object_detection")
+
+# YOLO model to use
+YOLO_MODEL_NAME = os.getenv("YOLO_MODEL_NAME", "yolo11m.pt") 
+CONF_THRESHOLD = float(os.getenv("YOLO_CONF_THRESHOLD", "0.45")) 
+
+# Load the YOLO model once and reuse it
+YOLO_MODEL = YOLO(YOLO_MODEL_NAME)
+
+# MinIO Configuration
+MINIO_URL = os.getenv("MINIO_URL", "localhost:9000")
+MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "minioadmin")
 
 # Initialize MinIO client
 minio_client = Minio(
@@ -29,39 +32,6 @@ minio_client = Minio(
     secure=False  # Set to True if you're using HTTPS
 )
 
-@mcp.tool()
-async def save_file_to_folder(folder_path: str, file_name: str, file_data: bytes) -> str:
-    """
-    Saves a file to a specified folder. If the folder doesn't exist, it creates the folder.
-
-    Args:
-        folder_path (str): Path to the folder where the file will be saved.
-        file_name (str): Name to use for the saved file.
-        file_data (bytes): Binary data of the file to save.
-
-    Returns:
-        str: Full path of the saved file.
-
-    Raises:
-        ValueError: If there is an error saving the file.
-    """
-    try:
-        # Ensure the folder exists, create it if not
-        if not os.path.exists(folder_path):
-            os.makedirs(folder_path)
-            print(f"Folder '{folder_path}' created.")
-
-        # Define the full file path
-        full_file_path = os.path.join(folder_path, file_name)
-
-        # Write the file data to the specified path
-        with open(full_file_path, "wb") as file:
-            file.write(file_data)
-
-        return f"File '{file_name}' saved successfully to folder '{folder_path}'. Full path: {full_file_path}"
-    except Exception as e:
-        raise ValueError(f"Error saving file to folder '{folder_path}': {e}")
-    
 @mcp.tool()
 async def get_image_from_minio(bucket_name: str, object_name: str) -> Image:
     """
@@ -130,16 +100,14 @@ async def put_image_to_minio(bucket_name: str, object_name: str, image_path: str
 async def list_detectable_categories() -> str:
     """Get the list of all object categories that this server can detect.
     """
-    # Load a model
-    model = YOLO(YOLO_MODEL)  # pretrained YOLO11n model
 
-    return ", ".join([f"{class_name}" for class_name in model.names.values()])
+    return ", ".join([f"{class_name}" for class_name in YOLO_MODEL.names.values()])
 
 @mcp.tool()
 async def detect_object(bucket_name: str, object_name: str, return_annotated_image: bool) -> Union[str, Tuple[str, Image]]:
     """
     Identify object categories and count their occurrences as defined by the MS COCO dataset. 
-    The complete list of recognizable objects can be accessed using model.names().
+    The complete list of recognizable objects can be accessed using model.names.
 
     Args:
         bucket_name (str): Name of the MinIO bucket containing the image.
@@ -160,16 +128,15 @@ async def detect_object(bucket_name: str, object_name: str, return_annotated_ima
         response.close()
         response.release_conn()
 
-        # Save the image data to a temporary file for YOLO processing
-        temp_image_path = "/tmp/temp_image.jpg"  # You can use tempfile for dynamic file names
-        with open(temp_image_path, "wb") as f:
-            f.write(image_data)
-
-        # Step 2: Load the YOLO model
-        model = YOLO(YOLO_MODEL)  # Pretrained YOLO model
+        # Save the image to a temporary file for YOLO processing
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp_image:
+            temp_image.write(image_data)
+            temp_image_path = temp_image.name
 
         # Step 3: Perform inference
-        results = model(temp_image_path, conf=0.45)  # Returns a list of Results objects
+        results = YOLO_MODEL(temp_image_path, conf=CONF_THRESHOLD, verbose=False)  # Returns a list of Results objects
+        os.remove(temp_image_path)  # Clean up temp file
+        
         if not results:
             raise ValueError("No results returned from the model.")
         
@@ -212,7 +179,6 @@ async def detect_object(bucket_name: str, object_name: str, return_annotated_ima
         raise ValueError(f"Error retrieving image from MinIO: {e}")
     except Exception as e:
         raise ValueError(f"Error in detect_object: {e}")
-    
     
 
 if __name__ == "__main__":

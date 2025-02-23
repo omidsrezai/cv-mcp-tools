@@ -1,4 +1,4 @@
-# FLUX.1-Schnell Server
+# Image Generator (FLUX.1-Schnell) Server
  
 - A Gradio service for image generation using [FLUX.1-schnell](https://huggingface.co/black-forest-labs/FLUX.1-schnell). 
 - By default, the service runs on port 6070, but this can be changed via the PORT environment variable.
@@ -13,7 +13,7 @@
 
 ### Building Image:
 ```shell
-docker buildx build -t flux-schnell -f image-generators/flux-schnell/Dockerfile .
+docker buildx build -t flux-schnell -f image_generator_server/Dockerfile .
 ```
 
 ### Running Container:
@@ -27,5 +27,5 @@ docker run --gpus all \
 ## Demo
 After running the Docker container, open a separate terminal and run:
 ```shell
-python image-generators/flux-schnell/demo_client.py
+python demo_client.py
 ```

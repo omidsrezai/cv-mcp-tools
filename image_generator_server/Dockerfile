@@ -1,8 +1,9 @@
 # Use an official CUDA runtime and development image as a parent image
-FROM nvidia/cuda:12.0.0-cudnn8-runtime-ubuntu22.04
+#FROM nvidia/cuda:12.0.0-cudnn8-runtime-ubuntu22.04
+FROM nvidia/cuda:12.0.0-cudnn8-devel-ubuntu22.04
 
 # Set the working directory in the container to /image-caption-extractor
-WORKDIR /flux-schnell
+WORKDIR /image_generator_server
 
 # Install Python
 RUN apt-get update && \
@@ -11,16 +12,16 @@ RUN apt-get update && \
     pip install --upgrade setuptools wheel
     
 # Add the requirements file first to leverage Docker cache
-COPY image-generators/flux-schnell/requirements.txt .
+COPY image_generator_server/requirements.txt .
     
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the application code
-COPY image-generators/flux-schnell/app/ /flux-schnell/app/
-COPY image-generators/flux-schnell/demo_client.py .
+COPY image_generator_server/app/ /image_generator_server/app/
+COPY image_generator_server/demo_client.py .
 
-WORKDIR /flux-schnell/app
+WORKDIR /image_generator_server/app
 
 # Make port 6070 available to the world outside this container
 EXPOSE 6070
