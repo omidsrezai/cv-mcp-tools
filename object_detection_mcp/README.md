@@ -18,7 +18,7 @@ To use this **MCP server** with Claude Desktop, follow these steps:
                "command": "uv",
                "args": [
                    "--directory",
-                   "/ABSOLUTE/PATH/TO/PARENT/FOLDER/object_detection",
+                   "/ABSOLUTE/PATH/TO/PARENT/FOLDER/object_detection_mcp",
                    "run",
                    "object_detection.py"
                ],
@@ -61,7 +61,7 @@ Instead of Claude Desktop, you can use [Ollama](https://github.com/ollama/ollama
                "command": "uv",
                "args": [
                    "--directory",
-                   "/ABSOLUTE/PATH/TO/PARENT/FOLDER/object_detection",
+                   "/ABSOLUTE/PATH/TO/PARENT/FOLDER/object_detection_mcp",
                    "run",
                    "object_detection.py"
                ],
