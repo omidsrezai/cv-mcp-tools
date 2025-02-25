@@ -37,7 +37,7 @@ To use this **MCP server** with Claude Desktop on Mac, follow these steps:
    **Note about environment variables:**
    - `IMAGEN_API_ENDPOINT` defines the endpoint for the [image generator Gradio server](../image_generator_server) 
    - `OCR_API_ENDPOINT` specifies the endpoint for the [OCR Gradio server](../ocr_server) 
-   - MinIO credentials are used to read source images and write annotated detection results
+   - MinIO credentials are used to store and retrieve AI-generated images in MinIO buckets
 
 **Note**: For Windows installation or troubleshooting, check the [Model Context Protocol Quickstart Guide](https://modelcontextprotocol.io/quickstart/server)
 
