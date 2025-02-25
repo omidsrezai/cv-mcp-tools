@@ -2,7 +2,7 @@
 
 ## Using the MCP Server with Claude Desktop
 
-To use this **MCP server** with Claude Desktop, follow these steps:
+To use this **MCP server** with Claude Desktop on Mac, follow these steps:
 
 1. Create the configuration file:
    ```bash
