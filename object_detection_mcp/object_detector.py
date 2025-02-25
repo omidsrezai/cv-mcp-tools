@@ -1,4 +1,6 @@
+import asyncio
 import io
+from pathlib import Path
 import os
 import tempfile
 from typing import Union, Tuple
@@ -104,7 +106,7 @@ async def list_detectable_categories() -> str:
     return ", ".join([f"{class_name}" for class_name in YOLO_MODEL.names.values()])
 
 @mcp.tool()
-async def detect_object(bucket_name: str, object_name: str, return_annotated_image: bool) -> Union[str, Tuple[str, Image]]:
+async def detect_object(bucket_name: str, object_name: str, return_annotated_image: bool) -> Union[Tuple[str, str], Tuple[str, str, Image]]:
     """
     Identify object categories and count their occurrences as defined by the MS COCO dataset. 
     The complete list of recognizable objects can be accessed using model.names.
@@ -115,12 +117,11 @@ async def detect_object(bucket_name: str, object_name: str, return_annotated_ima
         return_annotated_image (bool): Whether to return an annotated image.
 
     Returns:
-        Union[str, Tuple[str, Image]]: 
-            - If `return_annotated_image` is False, returns a string describing object counts.
-            - If `return_annotated_image` is True, returns a tuple containing:
-              1. A string describing object counts.
-              2. A `fastmcp.Image` object representing the annotated image.
+        Union[Tuple[str, str], Tuple[str, str, Image]]: 
+            - If `return_annotated_image` is False, returns (text description, path of annotated image object in the MinIO bucket.).
+            - If `return_annotated_image` is True, returns (text description, annotated image name, annotated image as `fastmcp.Image`).
     """
+
     try:
         # Step 1: Retrieve the image from MinIO
         response = minio_client.get_object(bucket_name, object_name)
@@ -129,13 +130,12 @@ async def detect_object(bucket_name: str, object_name: str, return_annotated_ima
         response.release_conn()
 
         # Save the image to a temporary file for YOLO processing
-        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp_image:
+        with tempfile.NamedTemporaryFile(suffix=".jpg", delete=True) as temp_image:
             temp_image.write(image_data)
             temp_image_path = temp_image.name
 
-        # Step 3: Perform inference
-        results = YOLO_MODEL(temp_image_path, conf=CONF_THRESHOLD, verbose=False)  # Returns a list of Results objects
-        os.remove(temp_image_path)  # Clean up temp file
+            # Step 3: Perform inference
+            results = YOLO_MODEL(temp_image_path, conf=CONF_THRESHOLD, verbose=False)  # Returns a list of Results objects
         
         if not results:
             raise ValueError("No results returned from the model.")
@@ -152,17 +152,39 @@ async def detect_object(bucket_name: str, object_name: str, return_annotated_ima
         # Generate textual result
         text_result = ", ".join([f"{class_name}: {count}" for class_name, count in class_counts.items()])
         
-        # Step 5: Return annotated image if requested
+        # Step 5: Generate annotated image
+        annotated_image_bgr = result.plot()  # This returns the image in BGR format
+
+        # Convert BGR to RGB
+        annotated_image_rgb = annotated_image_bgr[..., ::-1]
+
+        # Convert NumPy array to a Pillow image
+        rgb_image = PILImage.fromarray(annotated_image_rgb, mode="RGB")
+
+        # Step 6: Save the original-size image to a buffer for MinIO upload
+        original_buffer = io.BytesIO()
+        rgb_image.save(original_buffer, format="JPEG", quality=100)
+        original_buffer.seek(0)
+
+        # Upload the **original-size** annotated image to MinIO
+        name = Path(object_name).stem  # Extracts the name without extension
+        annotated_image_name = f"{name}_annotated.jpg"
+
+        try:
+            await asyncio.to_thread(
+                minio_client.put_object,
+                bucket_name,
+                annotated_image_name,
+                original_buffer,
+                original_buffer.getbuffer().nbytes
+            )
+        except S3Error as e:
+            raise ValueError(f"Error uploading annotated image to MinIO: {e}")
+        
+        # Step 7: Return annotated image if requested
         if return_annotated_image:
-            annotated_image_bgr = result.plot()  # This returns the image in BGR format
 
-            # Convert BGR to RGB
-            annotated_image_rgb = annotated_image_bgr[..., ::-1]
-
-            # Convert the NumPy array to a Pillow image
-            rgb_image = PILImage.fromarray(annotated_image_rgb, mode="RGB")
-
-            # Resize the image so the largest dimension is 100 pixels
+            # Resize while maintaining aspect ratio
             rgb_image.thumbnail((600, 600))
             
             # Save the image to an in-memory buffer
@@ -171,10 +193,10 @@ async def detect_object(bucket_name: str, object_name: str, return_annotated_ima
             buffer.seek(0)
 
             # Return both the textual result and the annotated image
-            return text_result, Image(data=buffer.read(), format="png")
+            return text_result, annotated_image_name, Image(data=buffer.read(), format="png")
         else:
             # Return only the textual result
-            return text_result
+            return text_result, annotated_image_name
     except S3Error as e:
         raise ValueError(f"Error retrieving image from MinIO: {e}")
     except Exception as e:
